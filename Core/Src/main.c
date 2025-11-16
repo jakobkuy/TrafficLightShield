@@ -110,16 +110,16 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    // Simple blinking pattern - all traffic lights red
-    ShiftReg_Update(U1_TL1_RED, U2_TL2_RED | U2_TL3_RED, U3_TL4_RED);
+    // Simple blinking pattern - all 4 traffic lights red
+    ShiftReg_Update(U1_TL1_RED, U2_TL2_RED, U3_TL3_RED | U3_TL4_RED);
     HAL_Delay(1000);
 
-    // All yellow
-    ShiftReg_Update(U1_TL1_YELLOW, U2_TL2_YELLOW | U2_TL3_YELLOW, U3_TL4_YELLOW);
+    // All 4 traffic lights yellow
+    ShiftReg_Update(U1_TL1_YELLOW, U2_TL2_YELLOW, U3_TL3_YELLOW | U3_TL4_YELLOW);
     HAL_Delay(1000);
 
-    // All green
-    ShiftReg_Update(U1_TL1_GREEN, U2_TL2_GREEN | U2_TL3_GREEN, U3_TL4_GREEN);
+    // All 4 traffic lights green
+    ShiftReg_Update(U1_TL1_GREEN, U2_TL2_GREEN, U3_TL3_GREEN | U3_TL4_GREEN);
     HAL_Delay(1000);
 
   }

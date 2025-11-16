@@ -51,21 +51,21 @@ extern "C" {
 #define U1_PL1_GREEN    (1 << 4)  // Q4
 #define U1_PL1_BLUE     (1 << 5)  // Q5
 
-// U2 Register (TL2 + TL3)
+// U2 Register (TL2 + PL2) - CORRECTED per hardware schematics
 #define U2_TL2_RED      (1 << 0)  // Q0
 #define U2_TL2_YELLOW   (1 << 1)  // Q1
 #define U2_TL2_GREEN    (1 << 2)  // Q2
-#define U2_TL3_RED      (1 << 3)  // Q3
-#define U2_TL3_YELLOW   (1 << 4)  // Q4
-#define U2_TL3_GREEN    (1 << 5)  // Q5
+#define U2_PL2_RED      (1 << 3)  // Q3 (3x LEDs in parallel)
+#define U2_PL2_GREEN    (1 << 4)  // Q4 (3x LEDs in parallel)
+#define U2_PL2_BLUE     (1 << 5)  // Q5 (3x LEDs in parallel)
 
-// U3 Register (TL4 + PL2)
-#define U3_TL4_RED      (1 << 0)  // Q0
-#define U3_TL4_YELLOW   (1 << 1)  // Q1
-#define U3_TL4_GREEN    (1 << 2)  // Q2
-#define U3_PL2_RED      (1 << 3)  // Q3
-#define U3_PL2_GREEN    (1 << 4)  // Q4
-#define U3_PL2_BLUE     (1 << 5)  // Q5
+// U3 Register (TL3 + TL4) - CORRECTED per hardware schematics
+#define U3_TL3_RED      (1 << 0)  // Q0
+#define U3_TL3_YELLOW   (1 << 1)  // Q1
+#define U3_TL3_GREEN    (1 << 2)  // Q2
+#define U3_TL4_RED      (1 << 3)  // Q3
+#define U3_TL4_YELLOW   (1 << 4)  // Q4
+#define U3_TL4_GREEN    (1 << 5)  // Q5
 
 /* Exported functions --------------------------------------------------------*/
 
