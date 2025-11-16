@@ -1,0 +1,48 @@
+# STM32CubeIDE / Eclipse
+.settings/
+.cproject
+.project
+.mxproject
+Debug/
+Release/
+
+# Build artifacts
+*.o
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.su
+*.d
+
+# Generated files
+Drivers/CMSIS/
+Drivers/STM32L4xx_HAL_Driver/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Keep these important files
+!*.ioc
+!Core/
+!CLAUDE.md
+!block_diagram.txt
+!*.md
