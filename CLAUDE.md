@@ -1,188 +1,245 @@
-# IS1300 Traffic Light Shield Project - Technical Documentation
+# IS1300 Traffic Light Shield - Technical Reference
 
 ## Project Overview
+- **Course**: IS1300 Embedded Systems, KTH | **Deadline**: December 19, 2025
+- **Board**: Nucleo-L476RG (STM32L476RG MCU) | **Team**: Groups of 2
+- **Project**: Traffic intersection with 4 lights (TL1-TL4) + 2 pedestrian crossings (PL1-PL2)
+- **Submission Format**: `PRO1_[Your_Canvas_Name]` (e.g., `PRO1_Jakob_Andersson`)
 
-This is the IS1300 Embedded Systems Traffic Light Shield project using the STM32L476RG microcontroller (Nucleo-L476RG development board). The project simulates a complete traffic intersection control system with four traffic lights (TL1-TL4) and two pedestrian crossings (PL1-PL2).
+---
 
-**Key Facts:**
-- **Course**: IS1300 Embedded Systems, KTH
-- **Duration**: 5+ weeks (~120 hours total)
-- **Team Size**: Groups of 2
-- **Submission Deadline**: December 19, 2025
-- **Development Board**: Nucleo-L476RG (STM32L476RG MCU)
-- **Shield**: Traffic Light Shield with 74HC595D shift registers
+## Grading Summary (11 pts max)
+
+| Category | Points | Key Requirements |
+|----------|--------|------------------|
+| **Planning/Architecture/Testing** | 0-2 | TDD tests + architecture diagrams (BOTH required for points) |
+| **Implementation & Complexity** | 0-3 | Task combinations (see below) |
+| **Report & Documentation** | 0-2 | Professional report + code comments + module interfaces |
+| **Real-Time Tasks (RTOS)** | 0-3 | RTOS Lab mandatory (1pt) + FreeRTOS impl optional (0-2pts, needs pre-approval) |
+| **Deadline Bonus** | +1 | Submit before Dec 19, 2025 |
+| **Exam Bonus** | +1 | Based on exam performance |
+
+**CRITICAL**: Minimum 1 point in EVERY category or project fails. Minimum 4 points total for grade E.
+
+**Grade Mapping**: A=11pts | B=9-10 | C=7-8 | D=5-6 | E=4
+
+---
+
+## Implementation Tasks (Category 2: 0-3 points)
+
+**Point Allocation (strict combinations)**:
+- **1 point**: Task 1 AND 2
+- **2 points**: Task 1 AND 2 AND (Task 4 OR 5)
+- **3 points**: Task 1 AND 2 AND 3 AND (Task 4 OR 5)
+
+### Task 1: Single Pedestrian Crossing (PL1 only) - REQUIRED
+- R1.1: Init: ped red, car green
+- R1.2: Button press → blue LED toggles @ `toggleFreq` until crossing green
+- R1.3: All car signals crossing → red after `pedestrianDelay` ms (with orange transition)
+- R1.4: Ped green for `walkingDelay` ms
+- R1.5: Ped red when any car green/orange, green only when all crossing cars red
+- R1.6: Car transitions: red→orange(`orangeDelay`)→green, green→orange(`orangeDelay`)→red
+
+**Parameters**: `toggleFreq`, `pedestrianDelay`, `walkingDelay`, `orangeDelay`
+
+### Task 2: Road Crossing Traffic Control (4 lights, no peds) - REQUIRED
+- R2.1: Forward/right turns only (no left)
+- R2.2: Prevent overlapping car paths
+- R2.3: All transitions include orange phase (`orangeDelay` ms)
+- R2.4: No cars → direction change every `greenDelay` ms
+- R2.5: Stay green if cars active in allowed direction + no waiting cars
+- R2.6: Car at red + active cars elsewhere → wait max `redDelayMax` ms
+- R2.7: Car at red + no active cars → immediate green transition
+- R2.8: Init: vertical (TL1,TL3) green, horizontal (TL2,TL4) red
+
+**Parameters**: `orangeDelay`, `greenDelay`, `redDelayMax`
+
+### Task 3: Complete Traffic System ⭐ (REQUIRED for 3 points)
+- R3.1-3.2: Task 1 + 2 for ALL crossings and lights
+- R3.3: **Only ONE pedestrian crossing green at a time** (critical!)
+- R3.4: **Shift registers MUST use SPI interface** (GPIO bit-banging NOT acceptable)
+- R3.5: Right turns allowed when ped crossing on right lane is green
+
+### Task 4: Display & Brightness Control
+- R4.1: LED brightness proportional to potentiometer voltage (via PWM on OE#)
+- R4.2: OLED display with 8 countdown bars:
+  - 2× Remaining `pedestrianDelay` (PL1, PL2)
+  - 2× Remaining `walkingDelay` (PL1, PL2)
+  - 2× Remaining `greenDelay` (vertical, horizontal)
+  - 2× Remaining `redDelay` (vertical, horizontal)
+- **Library**: https://github.com/afiskon/stm32-ssd1306
+
+### Task 5: UART Configuration Interface
+- Runtime parameter modification via UART2 (115200 baud)
+- **4-byte protocol**: [Param ID][0x00][Value MSB][Value LSB]
+- **Response**: ACK (0x01) if accepted, NACK (0x00) if rejected
+- **Parameters**:
+  - 0x01: toggleFreq (1-10 Hz)
+  - 0x02: pedestrianDelay (1000-10000 ms)
+  - 0x03: walkingDelay (1000-15000 ms)
+  - 0x04: orangeDelay (500-3000 ms)
+  - 0x05: greenDelay (2000-10000 ms)
+  - 0x06: redDelayMax (5000-30000 ms)
+
+---
+
+## Testing Requirements (Category 1: Testing Component)
+
+**For 1 point minimum, must have**:
+1. **TDD approach**: Write test FIRST → fail → implement → pass → refactor
+2. **Dedicated test file**: `Core/Src/tests.c` with execution function
+3. **Test categories**:
+   - Basic functionality (happy path: single LED, full cycle, button press)
+   - Corner cases (all cars present, no cars, simultaneous buttons, button spam)
+   - Boundary tests (min/max delay values)
+   - Integration tests (complete cycles, pedestrian stops correct cars)
+4. **Test execution**: Called from main.c (e.g., under `#ifdef RUN_TESTS`)
+5. **Test results documented in report** with pass/fail table
+
+**Test structure example**:
+```c
+void RunAllTests(void) {
+    uint8_t passed = 0, failed = 0;
+    if (Test_TL1_Red_LED_Only()) passed++; else failed++;
+    if (Test_EdgeCase_AllCarsPresent()) passed++; else failed++;
+    // Print summary
+}
+```
+
+---
+
+## Architecture Documentation (Category 1: Architecture Component)
+
+**For 1 point minimum, report must include**:
+
+### Hardware Architecture Diagrams:
+1. System block diagram (MCU + peripherals)
+2. Shift register chain diagram (data flow, U1→U2→U3)
+3. Pin connection diagram/table
+
+### Software Architecture Diagrams:
+1. Module dependency diagram
+2. Traffic light state machine diagram
+3. Pedestrian crossing state machine diagram
+4. Sequence diagram (≥1 scenario, e.g., pedestrian request)
+5. Timing diagram (showing delays)
+
+**All diagrams must have textual descriptions** explaining purpose, components, interactions, data flow, and design decisions.
+
+---
+
+## Report & Documentation Requirements (Category 3)
+
+**Report Quality (1 point)**:
+- Well-written, well-structured, relevant references (IEEE/APA format)
+- **Required sections**: Title, Abstract, TOC, Introduction, Requirements, Architecture, Implementation, Testing, Results, Discussion, Conclusion, References
+- All diagrams numbered, captioned, and referenced in text
+- Professional academic tone, no errors
+
+**Code Documentation (1 point)**:
+- **Module interfaces described in report** (purpose, functions, dependencies)
+- **File headers**: author, date, brief description
+- **Function headers**: brief, details, params, return, notes, examples
+- **Inline comments**: explain WHY (not what), complex logic, hardware constraints
+- **Clear naming conventions**: self-documenting variable/function names
+
+---
 
 ## Hardware Architecture
 
-### Microcontroller: STM32L476RG
-- **Core**: ARM Cortex-M4 with FPU
-- **Flash**: 1 MB
-- **SRAM**: 128 KB
-- **Clock**: Up to 80 MHz
-- **Voltage**: 3.3V logic levels
+### MCU: STM32L476RG (Nucleo-L476RG Board)
+- **Core**: ARM Cortex-M4 with FPU | **Flash**: 1 MB | **SRAM**: 128 KB
+- **Clock**: Up to 80 MHz | **Voltage**: 3.3V logic
 
-### Main Components
+### Shift Registers: 3× 74HC595D (Daisy-Chained)
+- **Per-pin current**: 35 mA max | **Total current**: 70 mA per chip max
+- **Data ordering**: Send U3 FIRST → U2 → U1 LAST (reverse order due to daisy chain)
+- **Only 6 of 8 outputs used** per register (Q0-Q5, Q6-Q7 unused)
+- **Pin functions**:
+  - DS (pin 14): Serial data input
+  - Q7S (pin 9): Serial data output (daisy chain)
+  - SHCP (pin 11): Shift clock (rising edge)
+  - STCP (pin 12): Latch clock (rising edge)
+  - OE# (pin 13): Output enable (active LOW, use for PWM brightness)
+  - MR# (pin 10): Master reset (active LOW, keep HIGH)
 
-#### 1. Three Daisy-Chained 74HC595D Shift Registers (U1, U2, U3)
-The system uses three 8-bit shift registers to control all LEDs. **Critical: Only 6 of 8 outputs per register are actually used.**
+---
 
-**Shift Register Specifications:**
-- **Per-pin current limit**: 35 mA maximum
-- **Total current limit**: 70 mA per chip (all outputs combined)
-- **Operating voltage**: 2.0V to 6.0V
-- **Max shift frequency**: 100 MHz (typical)
+## Pin Mappings (VERIFIED FROM SCHEMATICS)
 
-**Pin Functions:**
-- `DS` (pin 14): Serial Data Input
-- `Q7S` (pin 9): Serial Data Output (for daisy-chaining)
-- `SHCP` (pin 11): Shift Register Clock (shift on rising edge)
-- `STCP` (pin 12): Storage Register Clock (latch on rising edge)
-- `OE#` (pin 13): Output Enable (active LOW)
-- `MR#` (pin 10): Master Reset (active LOW)
-- `Q0-Q7` (pins 15, 1-7): Parallel outputs
-
-**Connection Chain:**
+### Shift Register Control (Hybrid SPI + GPIO)
 ```
-MCU → U1(DS) → U1(Q7S) → U2(DS) → U2(Q7S) → U3(DS) → U3(Q7S)
+Signal       MCU Pin   Pin#   Function              Notes
+595_DS       PB_05     67     Serial Data           Can use SPI1_MOSI or GPIO
+595_SHCP     PC_10     1      Shift Clock           Can use SPI3_SCK or GPIO
+595_STCP     PB_12     54     Latch (Storage Clock) GPIO ONLY (not on SPI!)
+595_Enable   PC_07     57     Output Enable (OE#)   TIM3_CH2 for PWM brightness
+595_Reset    PA_09     59     Master Reset (MR#)    GPIO, initialize HIGH
 ```
 
-**CRITICAL: Data Ordering**
-When sending 24 bits to the daisy chain, **data must be sent in reverse order**:
-- First send: U3 data (bits for rightmost register)
-- Then send: U2 data (middle register)
-- Last send: U1 data (leftmost register)
+**CRITICAL NOTES**:
+- For Task 3 (SPI requirement), use SPI3 with SHCP on PC_10
+- STCP is NOT on any SPI peripheral → must use GPIO
+- Different SPI peripherals: DS on SPI1, SHCP on SPI3 → recommend GPIO bit-banging for Tasks 1-2
+- OE# is active LOW: duty 0%=max brightness, 100%=off
 
-#### 2. Traffic Lights (TL1, TL2, TL3, TL4)
-Each traffic light has 3 LEDs (Red, Yellow, Green) with current-limiting resistors.
-
-**LED Resistor Values:**
-- Red LEDs: 180Ω (typical forward voltage ~2.0V)
-- Yellow LEDs: 560Ω (typical forward voltage ~2.1V)
-- Green LEDs: 820Ω (typical forward voltage ~2.2V)
-
-#### 3. Pedestrian Crossings (PL1, PL2)
-Each crossing has:
-- Red LED (walking prohibited) - 180Ω resistor
-- Green LED (safe to walk) - 180Ω resistor
-- Blue LED (button indicator) - 120Ω resistor
-- Push button switch (SW5 for PL1, SW6/SW7/SW8 for PL2)
-
-**SPECIAL NOTE FOR PL2:**
-PL2 has **triple LEDs per color connected in parallel** (3x red, 3x green, 3x blue). This requires careful current consideration:
-- Each color group draws 3x the current of PL1
-- Must ensure total current stays within 70mA chip limit
-
-#### 4. Car Detection Switches
-Four switches (SW1-SW4) simulate car presence:
-- Switch HIGH → car present
-- Switch LOW → no car
-- Connected to GPIO pins (TL1_Car through TL4_Car)
-
-#### 5. OLED Display (SSD1306)
-- **Resolution**: 128x64 pixels monochrome
-- **Interface**: SPI
-- **Driver IC**: SSD1306
-- **Library**: Use existing library from https://github.com/afiskon/stm32-ssd1306
-
-#### 6. Additional Peripherals
-- **LIS2DW12TR**: 3-axis accelerometer (I2C interface)
-- **SHT20**: Temperature/Humidity sensor (I2C interface)
-- **Potentiometer**: Analog input for LED brightness control
-- **Joystick**: 5-way control (center + 4 directions)
-- **CAN Bus**: Available for communication
-- **UART**: Serial communication via ST-Link virtual COM port
-
-## Pin Mappings
-
-### Critical Pin Assignments (VERIFIED BY MANUAL CROSS-CHECK)
-
-#### Shift Register Control (Hybrid SPI + GPIO)
+### Car Detection Switches (All GPIO_Input with pull-down)
 ```
-Pin Name        MCU Pin    MCU Pin#   Function              Peripheral
-─────────────────────────────────────────────────────────────────────────
-595_DS          PB_05      Pin 67     Serial Data          SPI1_MOSI / GPIO
-595_SHCP        PC_10      Pin 1      Shift Clock          SPI3_SCK
-595_STCP        PB_12      Pin 54     Storage Clock (Latch) GPIO (NOT on SPI)
-595_Enable      PC_07      Pin 57     Output Enable        GPIO / TIM3_CH2 (PWM)
-595_Reset       PA_09      Pin 59     Master Reset         GPIO
+Signal       MCU Pin   Pin#
+TL1_Car      PC_04     72
+TL2_Car      PB_13     68
+TL3_Car      PB_14     66
+TL4_Car      PA_10     71
 ```
 
-**IMPORTANT**: This is a **hybrid approach**, not pure SPI:
-- `SHCP` can use SPI3_SCK peripheral (PC_10)
-- `DS` can use SPI1_MOSI (PB_05) **NOTE: Different SPI peripheral than SHCP!**
-- For SPI-based control, recommend using **GPIO bit-banging** to avoid SPI peripheral conflicts
-- `STCP` (latch) **must** be controlled via GPIO (PB_12) - it's not on any SPI
-- `OE` and `MR` are also GPIO-controlled
-- PC_07 (595_Enable) can use TIM3_CH2 for PWM brightness control
-
-#### I2C Peripherals
+### Pedestrian Buttons (All GPIO_Input with pull-down)
 ```
-I2C_SDA         PB_09      I2C Data             I2C1_SDA
-I2C_SCL         PB_08      I2C Clock            I2C1_SCL
-```
-Connected to: LIS2DW12TR accelerometer, SHT20 temp/humidity sensor
-
-#### OLED Display (SPI)
-```
-SPI_MOSI        PC_12      Master Out           SPI3_MOSI
-SPI_SCLK        PC_10      SPI Clock            SPI3_SCLK
-Disp_CS         PA_04      Chip Select          GPIO
-Disp_Reset      PC_14      Reset                GPIO
-Disp_Data/Instr PB_00      Data/Command Select  GPIO
+Signal       MCU Pin   Pin#
+PL1_Switch   PA_15     17
+PL2_Switch   PB_07     21
 ```
 
-#### Car Switches (Digital Inputs)
+### Potentiometer (ADC)
 ```
-Signal Name     MCU Pin    MCU Pin#   Function             Peripheral
-───────────────────────────────────────────────────────────────────────
-TL1_Car         PC_04      Pin 72     Traffic Light 1      GPIO Input
-TL2_Car         PB_13      Pin 68     Traffic Light 2      GPIO Input
-TL3_Car         PB_14      Pin 66     Traffic Light 3      GPIO Input
-TL4_Car         PA_10      Pin 71     Traffic Light 4      GPIO Input
+Signal       MCU Pin   Pin#   ADC Channel
+Poti         PB_01     62     ADC1_IN16
+```
+**NOTE**: PB_01, NOT PC_04 (no conflict with TL1_Car)
+
+### UART Communication (ST-Link Virtual COM)
+```
+UART_TX      PA_02     -      USART2_TX (115200 baud)
+UART_RX      PA_03     -      USART2_RX
 ```
 
-**NOTE**: TL1_Car shares pin PC_04 with Potentiometer - verify actual usage in your implementation!
-
-#### Pedestrian Buttons (Digital Inputs)
+### I2C Peripherals (Sensors)
 ```
-Signal Name     MCU Pin    MCU Pin#   Function             Peripheral
-───────────────────────────────────────────────────────────────────────
-PL1_Switch      PA_15      Pin 17     Pedestrian 1         GPIO Input
-PL2_Switch      PB_07      Pin 21     Pedestrian 2         GPIO Input
+I2C_SDA      PB_09     -      I2C1_SDA
+I2C_SCL      PB_08     -      I2C1_SCL
 ```
 
-#### Potentiometer (Analog Input)
+### OLED Display (SPI)
 ```
-Signal Name     MCU Pin    MCU Pin#   Function             Peripheral
-───────────────────────────────────────────────────────────────────────
-Poti            PB_01      Pin 62     Brightness Control   ADC1_IN16
-```
-
-#### Accelerometer Interrupts
-```
-LIS2DW12TR_Int1 PC_13      Interrupt 1          GPIO Input (EXTI)
-LIS2DW12TR_Int2 PC_15      Interrupt 2          GPIO Input (EXTI)
+SPI_MOSI     PC_12     -      SPI3_MOSI
+SPI_SCLK     PC_10     -      SPI3_SCLK (shared with 595_SHCP)
+Disp_CS      PA_04     -      GPIO (chip select)
+Disp_Reset   PC_14     -      GPIO (reset)
+Disp_D/C     PB_00     -      GPIO (data/command)
 ```
 
-#### User LEDs (Debug)
+### Debug LEDs
 ```
-USR_LED1        PB_02      User LED 1           GPIO Output
-USR_LED2        PA_05      User LED 2 (Green)   GPIO Output (also onboard LED)
+USR_LED1     PB_02     -      GPIO_Output
+USR_LED2     PA_05     -      GPIO_Output (onboard green LED)
 ```
 
-#### UART Communication
-```
-UART_TX         PA_02      UART Transmit        USART2_TX
-UART_RX         PA_03      UART Receive         USART2_RX
-```
-Note: USART2 is connected to ST-Link, accessible as virtual COM port on PC
+---
 
 ## LED Output Mapping (Shift Register Outputs)
 
-### Register U1 (First in chain, last to receive data)
+### Register U1 (First in chain, receives data LAST)
 ```
-Output   Pin    Connected To        Signal Name
-────────────────────────────────────────────────
+Output   Pin    Connected To        Signal Name      Notes
 Q0       15     TL1 Red            TL1_Red
 Q1       1      TL1 Yellow         TL1_Yellow
 Q2       2      TL1 Green          TL1_Green
@@ -195,22 +252,21 @@ Q7       7      NOT USED           -
 
 ### Register U2 (Middle)
 ```
-Output   Pin    Connected To        Signal Name
-────────────────────────────────────────────────
+Output   Pin    Connected To        Signal Name      Notes
 Q0       15     TL2 Red            TL2_Red
 Q1       1      TL2 Yellow         TL2_Yellow
 Q2       2      TL2 Green          TL2_Green
-Q3       3      PL2 Red (3x)       PL2_Red
-Q4       4      PL2 Green (3x)     PL2_Green
-Q5       5      PL2 Blue (3x)      PL2_Blue
+Q3       3      PL2 Red            PL2_Red          3× LEDs parallel
+Q4       4      PL2 Green          PL2_Green        3× LEDs parallel
+Q5       5      PL2 Blue           PL2_Blue         3× LEDs parallel
 Q6       6      NOT USED           -
 Q7       7      NOT USED           -
 ```
+**WARNING**: PL2 has 3× LEDs per color → 3× current draw!
 
-### Register U3 (Last in chain, first to receive data)
+### Register U3 (Last in chain, receives data FIRST)
 ```
-Output   Pin    Connected To        Signal Name
-────────────────────────────────────────────────
+Output   Pin    Connected To        Signal Name      Notes
 Q0       15     TL3 Red            TL3_Red
 Q1       1      TL3 Yellow         TL3_Yellow
 Q2       2      TL3 Green          TL3_Green
@@ -221,525 +277,153 @@ Q6       6      NOT USED           -
 Q7       7      NOT USED           -
 ```
 
-## Implementation Tasks (Choose 4 for Full Points)
+---
 
-### Task 1: Single Pedestrian Crossing Control
-**Focus**: Upper pedestrian crossing (PL1) only
+## Shift Register Control Implementation
 
-**Requirements:**
-- R1.1: Initialize with pedestrian red, car signal green
-- R1.2: Button press → blue LED toggles at `toggleFreq` until crossing turns green
-- R1.3: All car signals crossing the crosswalk → red after `pedestrianDelay` ms
-- R1.4: Pedestrian signal stays green for `walkingDelay` ms
-- R1.5: Pedestrian red when any car signal is green/orange, green otherwise
-- R1.6: Car signals transition: red→orange→green or green→orange→red with `orangeDelay` ms
-
-**Parameters:** `toggleFreq`, `pedestrianDelay`, `walkingDelay`, `orangeDelay`
-
-### Task 2: Road Crossing Traffic Control
-**Focus**: Four traffic lights, no pedestrian crossings
-
-**Requirements:**
-- R2.1: Cars can go forward or turn right only (no left turns)
-- R2.2: Traffic lights prevent overlapping car paths
-- R2.3: Signal transitions include orange phase (`orangeDelay` ms)
-- R2.4: No active cars → allowed direction changes every `greenDelay` ms
-- R2.5: Traffic light stays green if cars active in allowed direction and no cars waiting on red
-- R2.6: Car at red + active cars elsewhere → wait max `redDelayMax` ms before green
-- R2.7: Car at red + no active cars → immediate green transition
-- R2.8: Initialize vertical lane green, horizontal lane red
-
-**Parameters:** `orangeDelay`, `greenDelay`, `redDelayMax`
-
-### Task 3: Complete Traffic System
-**Combines Tasks 1 and 2**
-
-**Additional Requirements:**
-- R3.1: Requirements of Task 1 for each crossing (PL1 and PL2)
-- R3.2: Requirements of Task 2 for car crossing
-- R3.3: **Only one pedestrian crossing green at a time**
-- R3.4: **Shift registers controlled with SPI interface**
-- R3.5: Cars allowed to turn right when crossing on right lane is green
-
-**Note:** This task requires SPI implementation for shift registers.
-
-### Task 4: Display and Brightness Control
-**Complements Tasks 1, 2, or 3**
-
-**Requirements:**
-- R4.1: LED brightness proportional to potentiometer voltage
-- R4.2: OLED display shows waiting time bars for:
-  - Remaining `pedestrianDelay` (x2, one per crossing)
-  - Remaining `walkingDelay` (x2)
-  - Remaining `greenDelay` (x2)
-  - Remaining `redDelay` (x2)
-
-**Display Format:** Bars that reduce in size as time counts down
-
-**Technical Notes:**
-- Use PWM on `595_Enable` (OE# pin) to control brightness
-- Use SSD1306 OLED library: https://github.com/afiskon/stm32-ssd1306
-- Potentiometer on PC_04 (ADC1_IN13)
-
-## Technical Implementation Guidance
-
-### 1. Shift Register Control
-
-#### Method A: Bit-Banging (GPIO)
+### Method A: GPIO Bit-Banging (Tasks 1, 2)
 ```c
-// Pseudo-code for GPIO control
-void shift_out_byte(uint8_t data) {
+void shift_byte(uint8_t data) {
     for (int i = 7; i >= 0; i--) {
-        // Set data bit
-        GPIO_Write(595_DS, (data >> i) & 0x01);
-        
-        // Clock pulse
-        GPIO_Write(595_SHCP, HIGH);
-        delay_us(1);
-        GPIO_Write(595_SHCP, LOW);
+        HAL_GPIO_WritePin(DS_PORT, DS_PIN, (data >> i) & 0x01);
+        HAL_GPIO_WritePin(SHCP_PORT, SHCP_PIN, HIGH); // Clock pulse
+        HAL_GPIO_WritePin(SHCP_PORT, SHCP_PIN, LOW);
     }
 }
 
-void update_leds(uint8_t u3_data, uint8_t u2_data, uint8_t u1_data) {
-    // Send in reverse order: U3 → U2 → U1
-    shift_out_byte(u3_data);
-    shift_out_byte(u2_data);
-    shift_out_byte(u1_data);
-    
-    // Latch data to outputs
-    GPIO_Write(595_STCP, HIGH);
-    delay_us(1);
-    GPIO_Write(595_STCP, LOW);
+void update_leds(uint8_t u3, uint8_t u2, uint8_t u1) {
+    shift_byte(u3); shift_byte(u2); shift_byte(u1);  // U3 first!
+    HAL_GPIO_WritePin(STCP_PORT, STCP_PIN, HIGH);     // Latch
+    HAL_GPIO_WritePin(STCP_PORT, STCP_PIN, LOW);
 }
 ```
 
-#### Method B: SPI-Based (Recommended for Task 3)
+### Method B: SPI (Task 3 - REQUIRED)
 ```c
-// Pseudo-code for SPI control
-void update_leds_spi(uint8_t u3_data, uint8_t u2_data, uint8_t u1_data) {
-    uint8_t buffer[3] = {u3_data, u2_data, u1_data};
-    
-    // Send data via SPI3
+void update_leds_spi(uint8_t u3, uint8_t u2, uint8_t u1) {
+    uint8_t buffer[3] = {u3, u2, u1};
     HAL_SPI_Transmit(&hspi3, buffer, 3, HAL_MAX_DELAY);
-    
-    // Latch via GPIO
-    HAL_GPIO_WritePin(STCP_PORT, STCP_PIN, GPIO_PIN_SET);
-    HAL_Delay_us(1);
-    HAL_GPIO_WritePin(STCP_PORT, STCP_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(STCP_PORT, STCP_PIN, HIGH);  // Latch via GPIO
+    HAL_GPIO_WritePin(STCP_PORT, STCP_PIN, LOW);
 }
 ```
+**SPI Configuration**: Mode 0 (CPOL=0, CPHA=0), MSB first, 1-10 MHz
 
-**SPI Configuration for 74HC595:**
-- Mode: SPI_MODE_0 (CPOL=0, CPHA=0)
-- Bit order: MSB first
-- Speed: Up to 100 MHz (use slower for reliability, e.g., 1-10 MHz)
-- Data size: 8 bits
+---
 
-### 2. PWM for Brightness Control
+## PWM Brightness Control (Task 4)
 
-To control LED brightness via potentiometer:
+Use TIM3_CH2 (PC_07) to control OE# pin for LED brightness:
 
 ```c
-// Configure TIM2 for PWM on OE# pin (595_Enable, PB_04)
-// PB_04 can use TIM3_CH1
-
-void setup_brightness_pwm() {
-    // Initialize TIM3 Channel 1 for PWM
-    // Frequency: ~1 kHz (above flicker threshold)
-    // Duty cycle: controlled by potentiometer ADC reading
-}
-
+// Init: TIM3, ~1 kHz, ARR=999
 void update_brightness(uint16_t adc_value) {
-    // ADC range: 0-4095 (12-bit)
-    // PWM duty: 0-100%
-    // Note: OE# is active LOW, so invert logic
-    
-    uint16_t duty = (adc_value * 100) / 4095;
-    duty = 100 - duty;  // Invert for active-low OE#
-    
-    TIM_SetDutyCycle(TIM3, TIM_CHANNEL_1, duty);
-}
-```
-
-### 3. Timing Considerations
-
-**Orange Phase Timing:**
-The orange/yellow light creates a transition period:
-```
-Red → Orange (orangeDelay ms) → Green
-Green → Orange (orangeDelay ms) → Red
-```
-
-**Example State Machine:**
-```c
-typedef enum {
-    STATE_RED,
-    STATE_RED_TO_GREEN,  // Orange phase
-    STATE_GREEN,
-    STATE_GREEN_TO_RED   // Orange phase
-} TrafficLightState;
-```
-
-### 4. Common Pitfalls and Solutions
-
-**Problem 1: LEDs not lighting correctly**
-- Check data ordering (reverse order for daisy chain)
-- Verify current limits (max 35mA per pin, 70mA total)
-- Ensure OE# is LOW to enable outputs
-- Check MR# is HIGH (reset is active LOW)
-
-**Problem 2: SPI not working with shift registers**
-- Remember STCP is **not** on SPI - must use GPIO
-- Set correct SPI mode (MODE_0)
-- Use appropriate SPI speed (start slow, 1 MHz)
-
-**Problem 3: PL2 LEDs too dim or not working**
-- PL2 has 3x LEDs per color in parallel
-- Triple current draw - check 70mA chip limit
-- May need to reduce other LED currents
-
-**Problem 4: Pedestrian crossing not responding**
-- Debounce button inputs (hardware or software)
-- Use interrupts or polling for button detection
-- Ensure pull-up/pull-down resistors configured
-
-### 5. Development Strategy
-
-**Incremental Development Approach:**
-
-1. **Week 1**: Basic GPIO and shift register control
-   - Get shift registers working (bit-banging)
-   - Control single traffic light
-   - Test LED output mapping
-
-2. **Week 2**: Implement chosen task logic
-   - State machines for traffic control
-   - Timing and delays
-   - Switch input handling
-
-3. **Week 3**: Additional features
-   - SPI implementation (if doing Task 3)
-   - OLED display (if doing Task 4)
-   - PWM brightness (if doing Task 4)
-
-4. **Week 4**: Integration and testing
-   - Combine all features
-   - Debug timing issues
-   - Edge case testing
-
-5. **Week 5**: Documentation and polish
-   - Code cleanup
-   - Written report
-   - Final testing
-
-## Project Requirements
-
-### Deliverables
-- **Source Code**: Due December 19, 2025
-- **Written Report**: Due December 19, 2025
-- **No live demo required** - submissions tested offline
-
-### Lab Sessions
-- 3 lab sessions × 4 hours each
-- Use for questions and direct feedback
-- Book time with course staff
-
-### Grading
-- Must implement **4 implementation tasks** for full complexity points
-- Each task has specific requirements (R1.x, R2.x, etc.)
-- Modular design recommended for easier integration
-
-## Debugging Tips
-
-### Serial Output for Debugging
-Use USART2 (connected to ST-Link):
-```c
-// Send debug messages to PC via USB virtual COM port
-printf("Traffic Light State: %d\n", current_state);
-printf("Car detected: TL1=%d, TL2=%d, TL3=%d, TL4=%d\n", 
-       tl1_car, tl2_car, tl3_car, tl4_car);
-```
-
-### User LEDs
-Two user LEDs available for status indication:
-- USR_LED1 (PB_02): Custom indicator
-- USR_LED2 (PA_05): Onboard green LED
-
-### Oscilloscope/Logic Analyzer
-For debugging SPI/shift register communication:
-- Monitor SHCP (clock) signal
-- Monitor DS (data) signal
-- Monitor STCP (latch) signal
-- Verify timing relationships
-
-## Reference Documents
-
-Located in project directory:
-- `STM32L476xx.pdf` - MCU datasheet
-- `UM1724.pdf` - Nucleo-64 board user manual
-- `UM2553.pdf` - STM32CubeIDE user manual
-- `en_DM00157440.pdf` - STM32L4x5/L4x6 reference manual (RM0351)
-- `74HC_HCT595.pdf` - Shift register datasheet
-- `IS1300_TrafficLight_Schematics.pdf` - Shield schematics
-- `SSD1306.pdf` - OLED display controller datasheet
-- `lis2dw12.pdf` - Accelerometer datasheet
-- `Sensirion_Datasheet_Humidity_Sensor_SHT20.pdf` - Temp/humidity sensor
-
-## Code Organization Recommendations
-
-```
-Project/
-├── Core/
-│   ├── Src/
-│   │   ├── main.c                  # Main application
-│   │   ├── shift_register.c        # 74HC595 control
-│   │   ├── traffic_light.c         # Traffic light logic
-│   │   ├── pedestrian_crossing.c   # Pedestrian crossing logic
-│   │   ├── state_machine.c         # State machine implementation
-│   │   └── timing.c                # Timing and delays
-│   └── Inc/
-│       ├── shift_register.h
-│       ├── traffic_light.h
-│       ├── pedestrian_crossing.h
-│       ├── state_machine.h
-│       └── timing.h
-├── Drivers/
-│   └── SSD1306/                    # OLED display library
-└── CLAUDE.MD                       # This file
-```
-
-## Key Takeaways for Claude Code
-
-1. **This is a real-time embedded system** - timing is critical
-2. **Current limits matter** - especially for PL2 with triple LEDs
-3. **Data ordering is reversed** - send U3 first, U1 last
-4. **Hybrid SPI approach** - STCP is GPIO, not pure SPI
-5. **Only 6 of 8 outputs used** per shift register
-6. **Modular design is essential** - makes integration easier
-7. **Test incrementally** - don't try to implement everything at once
-8. **Use HAL libraries** - STM32 HAL makes peripheral configuration easier
-
-## Quick Reference: Common Operations
-
-### Initialize System
-1. Configure GPIO pins (inputs for switches, outputs for shift register control)
-2. Initialize SPI3 (if using SPI method)
-3. Initialize TIM3 for PWM (if brightness control needed)
-4. Initialize ADC1 for potentiometer
-5. Initialize I2C1 for sensors
-6. Initialize USART2 for debugging
-7. Reset shift registers (MR# LOW then HIGH)
-8. Enable outputs (OE# LOW)
-
-### Update Single Traffic Light
-```c
-// Example: Set TL1 to Red
-uint8_t u1 = 0b00000001;  // Q0 = TL1_Red
-uint8_t u2 = 0b00000000;
-uint8_t u3 = 0b00000000;
-update_leds_spi(u3, u2, u1);
-```
-
-### Read Car Detection
-```c
-bool car_at_tl1 = HAL_GPIO_ReadPin(TL1_Car_PORT, TL1_Car_PIN);
-```
-
-### Read Pedestrian Button
-```c
-// With debouncing
-static uint32_t last_press = 0;
-bool button_pressed = false;
-
-if (HAL_GPIO_ReadPin(PL1_Switch_PORT, PL1_Switch_PIN)) {
-    if (HAL_GetTick() - last_press > 200) {  // 200ms debounce
-        button_pressed = true;
-        last_press = HAL_GetTick();
-    }
+    uint16_t duty = (adc_value * 999) / 4095;  // Map ADC (0-4095) to duty (0-999)
+    duty = 999 - duty;  // Invert: OE# is active LOW
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, duty);
 }
 ```
 
 ---
 
-**Remember**: This project is about understanding embedded systems fundamentals - state machines, timing, peripheral control, and hardware interfacing. Take time to understand each component before integrating everything together.
+## Configuration Parameters
 
-**Good luck with your project!** 🚦
-
----
-
-# PROJECT STATUS - Session 2025-11-16
-
-## ✅ COMPLETED
-
-### 1. Pin Mapping Verification
-**ALL pins manually verified from hardware schematics:**
-
-```
-SHIFT REGISTERS (GPIO bit-banging approach):
-  595_DS      → PB_05 (Pin 67) - GPIO_Output
-  595_SHCP    → PC_10 (Pin 1)  - GPIO_Output
-  595_STCP    → PB_12 (Pin 54) - GPIO_Output
-  595_Enable  → PC_07 (Pin 57) - TIM3_CH2 (PWM)
-  595_Reset   → PA_09 (Pin 59) - GPIO_Output (initialized HIGH)
-
-CAR SWITCHES (All GPIO_Input with pull-down):
-  TL1_Car     → PC_04 (Pin 72)
-  TL2_Car     → PB_13 (Pin 68)
-  TL3_Car     → PB_14 (Pin 66)
-  TL4_Car     → PA_10 (Pin 71)
-
-PEDESTRIAN BUTTONS (All GPIO_Input with pull-down):
-  PL1_Switch  → PA_15 (Pin 17)
-  PL2_Switch  → PB_07 (Pin 21)
-
-POTENTIOMETER (ADC):
-  Poti        → PB_01 (Pin 62) - ADC1_IN16
-```
-
-**IMPORTANT CORRECTION from original documentation:**
-- Poti is on **PB_01 (ADC1_IN16)**, NOT PC_04
-- This means **NO conflict** between potentiometer and TL1_Car
-- All 4 car switches AND potentiometer can be used simultaneously
-
-### 2. STM32CubeIDE Project Configuration
-
-**Project Name:** `TrafficLightShield`
-**Location:** `/Users/jakob/dev/kth/IS1300/TrafficLightShield/`
-**Board:** NUCLEO-L476RG
-**System Clock:** 80 MHz
-
-**Configured Peripherals:**
-- ✅ GPIO (all pins configured with proper labels)
-- ✅ ADC1 (IN16 for potentiometer, 12-bit, continuous mode, 247.5 cycle sampling)
-- ✅ TIM3 (Channel 2 for PWM, 1 kHz frequency, PSC=79, ARR=999)
-- ✅ USART2 (115200 baud for debugging via ST-Link)
-- ❌ I2C1 (not yet configured - for future sensor work)
-- ❌ SPI3 (not yet configured - for future OLED display)
-
-**Build Status:** ✅ Compiles successfully with 0 errors, 0 warnings
-
-### 3. Shift Register Driver Implementation
-
-**Files Created:**
-- `Core/Inc/shift_register.h` - Driver header with LED bit definitions
-- `Core/Src/shift_register.c` - Driver implementation using GPIO bit-banging
-
-**Key Functions:**
 ```c
-void ShiftReg_Init(void);                     // Initialize and reset shift registers
-void ShiftReg_Update(u1, u2, u3);             // Update all LEDs
-void ShiftReg_Clear(void);                    // Turn off all LEDs
-void ShiftReg_EnableOutputs(bool enable);     // Control OE# pin
-void ShiftReg_Test(void);                     // Hardware test sequence
+uint32_t toggleFreq = 2;         // Hz (blue LED toggle)
+uint32_t pedestrianDelay = 3000; // ms (delay before cars stop)
+uint32_t walkingDelay = 5000;    // ms (how long ped can walk)
+uint32_t orangeDelay = 1000;     // ms (orange phase duration)
+uint32_t greenDelay = 5000;      // ms (green when no cars)
+uint32_t redDelayMax = 10000;    // ms (max wait at red)
 ```
-
-**LED Bit Definitions:**
-- U1: `U1_TL1_RED`, `U1_TL1_YELLOW`, `U1_TL1_GREEN`, `U1_PL1_RED`, `U1_PL1_GREEN`, `U1_PL1_BLUE`
-- U2: `U2_TL2_RED`, `U2_TL2_YELLOW`, `U2_TL2_GREEN`, `U2_TL3_RED`, `U2_TL3_YELLOW`, `U2_TL3_GREEN`
-- U3: `U3_TL4_RED`, `U3_TL4_YELLOW`, `U3_TL4_GREEN`, `U3_PL2_RED`, `U3_PL2_GREEN`, `U3_PL2_BLUE`
-
-### 4. Test Code in main.c
-
-**Current Behavior:**
-1. On startup: Runs `ShiftReg_Test()` - cycles through each LED individually
-2. Main loop: Blinks all traffic lights red → yellow → green (1 second each)
-
-**Code added to USER CODE sections only** - safe for CubeMX regeneration
-
-## 📋 NEXT STEPS
-
-### Immediate (When Hardware Arrives):
-1. Connect Nucleo-L476RG to computer via USB
-2. Flash the code (click Run/Debug in STM32CubeIDE)
-3. Verify LED test sequence works correctly
-4. Debug any hardware issues
-
-### Implementation Tasks (Choose 4 for Full Points):
-
-**Priority Order:**
-1. **Task 3: Complete Traffic System** (counts as Tasks 1+2+3 combined)
-   - Implement traffic light state machine
-   - Implement pedestrian crossing logic
-   - Ensure only one pedestrian crossing green at a time
-   - Allow right turns when appropriate
-
-2. **Task 4: Display and Brightness Control**
-   - Configure SPI3 for OLED display (PC_10, PC_12)
-   - Integrate SSD1306 library from https://github.com/afiskon/stm32-ssd1306
-   - Implement ADC reading for potentiometer brightness control
-   - Use TIM3_CH2 PWM to control OE# for LED dimming
-   - Display countdown bars for delays
-
-### Code Organization Recommendations:
-
-Create these additional files:
-```
-Core/Inc/
-  traffic_light.h       - Traffic light state machine
-  pedestrian.h          - Pedestrian crossing logic
-  timing.h              - Delay tracking and timing
-
-Core/Src/
-  traffic_light.c
-  pedestrian.c
-  timing.c
-```
-
-### Configuration Still Needed:
-
-**For Task 4 (OLED Display):**
-- Configure SPI3 in CubeMX:
-  - MOSI: PC_12
-  - SCK: PC_10
-  - Mode: Full-Duplex Master, 8-bit, MSB first
-- Additional GPIO for OLED:
-  - Chip Select (need to verify pin)
-  - Reset (need to verify pin)
-  - D/C Select (need to verify pin)
-
-**For Sensor Integration (Optional):**
-- Configure I2C1 in CubeMX:
-  - SDA: PB_09
-  - SCL: PB_08
-  - Speed: 400 kHz (Fast Mode)
-
-## 🔧 DEVELOPMENT WORKFLOW
-
-**Recommended Approach:**
-1. **Pin/Peripheral Changes:** Use STM32CubeIDE (.ioc file)
-2. **Code Editing:** Use VS Code (faster, better editor)
-3. **Building:** Use STM32CubeIDE (hammer icon or Ctrl+B)
-4. **Flashing/Debugging:** Use STM32CubeIDE (Run/Debug button)
-
-**IMPORTANT:** Only edit code in `/* USER CODE BEGIN/END */` sections to preserve changes during code regeneration!
-
-## 📊 PROJECT STATISTICS
-
-- **Code Size:** 21,708 bytes (text) + 12 bytes (data) + 1,884 bytes (bss) = 23,604 bytes total
-- **Flash Usage:** ~2.3% of 1MB available
-- **Files Created:** 2 custom driver files + 1 modified main.c
-- **Build Time:** ~1.2 seconds
-
-## 🐛 KNOWN ISSUES / NOTES
-
-1. **Delay_us() function in shift_register.c is approximate** - uses busy-wait loop calibrated for 80 MHz. May need adjustment based on compiler optimization.
-
-2. **PWM Polarity:** OE# is active LOW, so:
-   - Duty 100% (CCR=999) = OE# HIGH = LEDs OFF
-   - Duty 0% (CCR=0) = OE# LOW = LEDs ON (max brightness)
-
-3. **Current Implementation:** GPIO bit-banging for shift registers. Can be upgraded to SPI later if needed, but requires handling the hybrid SPI1/SPI3 issue.
-
-4. **LED Output Mapping Note:** Check block_diagram.txt for detailed Q0-Q5 to LED connections if discrepancies arise.
-
-## 📚 REFERENCE FILES IN PROJECT
-
-- `CLAUDE.md` - This file (project documentation)
-- `block_diagram.txt` - Detailed hardware block diagram
-- `TrafficLightShield.ioc` - CubeMX configuration (hardware setup)
-- Reference PDFs in parent directory (datasheets, schematics, manuals)
 
 ---
 
-**Session End:** 2025-11-16
-**Status:** Project initialized and compiling successfully. Ready for hardware testing and feature implementation.
+## Current Implementation Status
+
+### ✅ Completed
+- Pin mapping verified from schematics
+- STM32CubeIDE project configured (`TrafficLightShield`)
+- System clock: 80 MHz
+- GPIO configured (all pins labeled correctly)
+- ADC1: IN16 (potentiometer), 12-bit, continuous mode, 247.5 cycle sampling
+- TIM3 CH2: PWM, 1 kHz (PSC=79, ARR=999)
+- USART2: 115200 baud
+- Shift register driver: `Core/Inc/shift_register.h`, `Core/Src/shift_register.c`
+- Functions: `ShiftReg_Init()`, `ShiftReg_Update(u1,u2,u3)`, `ShiftReg_Clear()`, `ShiftReg_Test()`
+- LED bit definitions: `U1_TL1_RED`, etc.
+- Test code: main.c cycles all LEDs red→yellow→green
+
+### 📋 Next Steps
+1. **Implement state machines**: traffic_light.c/h, pedestrian.c/h
+2. **Add timing module**: timing.c/h for delay tracking
+3. **Configure SPI3** (for Task 3)
+4. **Integrate OLED** (Task 4): SSD1306 library
+5. **Create test suite**: tests.c with TDD approach
+6. **Write report**: All diagrams + documentation
+
+---
+
+## Code Organization
+
+```
+Core/
+├── Inc/
+│   ├── shift_register.h      ✅ Created
+│   ├── traffic_light.h       📋 TODO
+│   ├── pedestrian.h          📋 TODO
+│   ├── timing.h              📋 TODO
+│   └── tests.h               📋 TODO
+└── Src/
+    ├── main.c                ✅ Modified (test code)
+    ├── shift_register.c      ✅ Created
+    ├── traffic_light.c       📋 TODO
+    ├── pedestrian.c          📋 TODO
+    ├── timing.c              📋 TODO
+    └── tests.c               📋 TODO
+```
+
+---
+
+## Common Pitfalls & Solutions
+
+1. **LEDs not lighting**: Check data order (U3→U2→U1), current limits (70mA/chip), OE# LOW, MR# HIGH
+2. **SPI not working**: STCP is GPIO (not SPI), use correct SPI mode (MODE_0)
+3. **PL2 LEDs dim**: Triple LEDs → check 70mA limit, may need to reduce other currents
+4. **Button not responding**: Debounce inputs (200ms typical)
+5. **Unplugging breaks debug**: On macOS, run `sudo ./stlink-fix.sh` before CubeIDE
+
+---
+
+## Quick Reference
+
+### macOS ST-Link Fix
+```bash
+sudo ./stlink-fix.sh          # Before opening CubeIDE
+# Use CubeIDE normally
+sudo ./stlink-restore.sh      # When done debugging
+```
+
+### Build Status
+- **Compiles**: ✅ 0 errors, 0 warnings
+- **Flash usage**: ~2.3% (23,604 bytes / 1 MB)
+
+### Debugging
+```c
+printf("State: %d\n", state);  // Via UART to ST-Link
+```
+
+---
+
+## External Resources
+
+- **SSD1306 Library**: https://github.com/afiskon/stm32-ssd1306
+- **Datasheets**: `STM32L476xx.pdf`, `74HC_HCT595.pdf`, `SSD1306.pdf`, etc.
+- **Reference Manual**: RM0351 (`en_DM00157440.pdf`)
+- **Schematics**: `IS1300_TrafficLight_Schematics.pdf`
+
+---
+
+**Last Updated**: 2025-11-18
+**Project Directory**: `/Users/jakob/dev/kth/IS1300/TrafficLightShield/`
+**Build**: ✅ Compiling successfully

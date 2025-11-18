@@ -46,3 +46,7 @@ Drivers/STM32L4xx_HAL_Driver/
 !CLAUDE.md
 !block_diagram.txt
 !*.md
+
+# Auto-generated debug configurations
+*.launch
+*.cfg

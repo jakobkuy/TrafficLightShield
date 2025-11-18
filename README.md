@@ -2,6 +2,29 @@
 
 KTH Embedded Systems course project - Traffic intersection control system using STM32L476RG.
 
+---
+
+## CRITICAL: ST-Link macOS Fix Required
+
+**If you're on macOS and having issues with ST-Link detection in STM32 CubeIDE, YOU MUST RUN THIS BEFORE EVERY SESSION:**
+
+```bash
+cd /Users/jakob/dev/kth/IS1300/TrafficLightShield
+sudo ./stlink-fix.sh
+```
+
+**After you're done working:**
+```bash
+sudo ./stlink-restore.sh
+```
+
+**Full documentation:** See [STLINK-MACOS-FIX.md](STLINK-MACOS-FIX.md) for complete details on the issue and solution.
+
+**The Problem:** macOS's USB driver claims exclusive ownership of ST-Link, blocking CubeIDE access.
+**The Solution:** Temporarily suspend the USB daemon before opening CubeIDE.
+
+---
+
 ## Hardware
 
 - **MCU**: STM32L476RG (Nucleo-L476RG board)
