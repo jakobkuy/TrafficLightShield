@@ -75,7 +75,7 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin : TL1_Car_Pin */
   GPIO_InitStruct.Pin = TL1_Car_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(TL1_Car_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : SR_STCP_Pin SR_DS_Pin */
@@ -88,13 +88,13 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pins : TL2_Car_Pin TL3_Car_Pin PL2_Switch_Pin */
   GPIO_InitStruct.Pin = TL2_Car_Pin|TL3_Car_Pin|PL2_Switch_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pins : TL4_Car_Pin PL1_Switch_Pin */
   GPIO_InitStruct.Pin = TL4_Car_Pin|PL1_Switch_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SR_SHCP_Pin */

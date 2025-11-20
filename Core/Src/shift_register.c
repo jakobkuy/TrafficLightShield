@@ -41,8 +41,8 @@ void ShiftReg_Init(void)
  * @brief Update all shift registers with new data
  *
  * @param u1_data: Data for U1 (TL1 + PL1)
- * @param u2_data: Data for U2 (TL2 + TL3)
- * @param u3_data: Data for U3 (TL4 + PL2)
+ * @param u2_data: Data for U2 (TL2 + PL2)
+ * @param u3_data: Data for U3 (TL3 + TL4)
  */
 void ShiftReg_Update(uint8_t u1_data, uint8_t u2_data, uint8_t u3_data)
 {

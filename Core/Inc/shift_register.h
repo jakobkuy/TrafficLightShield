@@ -81,8 +81,8 @@ void ShiftReg_Init(void);
  * @brief Update all LEDs with new data
  *
  * @param u1_data: Data for U1 register (TL1 + PL1)
- * @param u2_data: Data for U2 register (TL2 + TL3)
- * @param u3_data: Data for U3 register (TL4 + PL2)
+ * @param u2_data: Data for U2 register (TL2 + PL2)
+ * @param u3_data: Data for U3 register (TL3 + TL4)
  *
  * Example:
  *   ShiftReg_Update(U1_TL1_RED, U2_TL2_GREEN, U3_TL4_YELLOW);

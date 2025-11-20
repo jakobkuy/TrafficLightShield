@@ -94,11 +94,16 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  // Start PWM on TIM3 CH2 for LED brightness control (OE# pin)
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  // Set to 0% duty cycle for max brightness (OE# is active LOW: 0% = LOW = enabled)
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, 0);
+
   // Initialize shift registers
   ShiftReg_Init();
 
-  // Run LED test sequence
-  ShiftReg_Test();
+  // Run LED test sequence (comment out when not testing hardware)
+  // ShiftReg_Test();
 
   /* USER CODE END 2 */
 
@@ -110,17 +115,7 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-    // Simple blinking pattern - all 4 traffic lights red
-    ShiftReg_Update(U1_TL1_RED, U2_TL2_RED, U3_TL3_RED | U3_TL4_RED);
-    HAL_Delay(1000);
-
-    // All 4 traffic lights yellow
-    ShiftReg_Update(U1_TL1_YELLOW, U2_TL2_YELLOW, U3_TL3_YELLOW | U3_TL4_YELLOW);
-    HAL_Delay(1000);
-
-    // All 4 traffic lights green
-    ShiftReg_Update(U1_TL1_GREEN, U2_TL2_GREEN, U3_TL3_GREEN | U3_TL4_GREEN);
-    HAL_Delay(1000);
+    // TODO: Implement traffic light control logic here
 
   }
   /* USER CODE END 3 */
