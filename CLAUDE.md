@@ -339,6 +339,370 @@ uint32_t redDelayMax = 10000;    // ms (max wait at red)
 
 ---
 
+## RTOS Preparation & Design Patterns
+
+**IMPORTANT**: Even if implementing bare-metal (Tasks 1-2), design code with RTOS compatibility in mind. This enables seamless migration to FreeRTOS for optional bonus points (0-2 pts) with minimal refactoring.
+
+### Why Prepare for RTOS Now?
+
+1. **Optional bonus points**: FreeRTOS implementation worth 0-2 points (requires pre-approval)
+2. **RTOS Lab mandatory**: Worth 1 point, easier if project is RTOS-compatible
+3. **Future-proof architecture**: Better code structure even in bare-metal
+4. **No refactoring needed**: One codebase compiles for both bare-metal and RTOS
+
+### Critical RTOS Incompatibilities to Avoid
+
+#### ❌ **NEVER use HAL_Delay() in application code**
+```c
+// BAD - Blocks everything in RTOS
+void CrossIntersection(void) {
+    SetLight(RED);
+    HAL_Delay(3000);  // ❌ Blocks ALL tasks in FreeRTOS
+    SetLight(GREEN);
+}
+```
+
+#### ❌ **NEVER use blocking loops with delays**
+```c
+// BAD - Infinite blocking loop
+while (button_not_pressed) {
+    HAL_Delay(100);  // ❌ Wastes CPU, blocks tasks
+}
+```
+
+#### ❌ **NEVER access shared hardware without protection**
+```c
+// BAD - Race condition if multiple tasks access shift registers
+void Task1(void) { ShiftReg_Update(0x01, 0x00, 0x00); }
+void Task2(void) { ShiftReg_Update(0x00, 0x02, 0x00); }  // ❌ Data corruption
+```
+
+### 1. Timing Abstraction Layer (CRITICAL)
+
+Create `Core/Inc/timing.h` and `Core/Src/timing.c` to abstract all delay functions:
+
+#### timing.h
+```c
+#ifndef INC_TIMING_H_
+#define INC_TIMING_H_
+
+#include <stdint.h>
+
+// Function pointer type for delay implementation
+typedef void (*DelayFunc_t)(uint32_t ms);
+
+/**
+ * @brief Initialize timing system
+ * @param delay_func: Function to use for delays (NULL = use default HAL_Delay)
+ */
+void Timing_Init(DelayFunc_t delay_func);
+
+/**
+ * @brief Delay for specified milliseconds
+ * @param ms: Milliseconds to delay
+ *
+ * Uses HAL_Delay() in bare-metal, vTaskDelay() in RTOS
+ */
+void Timing_Delay(uint32_t ms);
+
+/**
+ * @brief Get current tick count
+ * @return Current system tick in milliseconds
+ *
+ * Uses HAL_GetTick() in bare-metal, xTaskGetTickCount() in RTOS
+ */
+uint32_t Timing_GetTick(void);
+
+/**
+ * @brief Check if timeout has elapsed
+ * @param start_tick: Starting tick value
+ * @param timeout_ms: Timeout duration in milliseconds
+ * @return true if timeout elapsed, false otherwise
+ */
+bool Timing_IsTimeout(uint32_t start_tick, uint32_t timeout_ms);
+
+#endif /* INC_TIMING_H_ */
+```
+
+#### timing.c (Bare-Metal Implementation)
+```c
+#include "timing.h"
+#include "main.h"
+
+#ifdef USE_FREERTOS
+#include "cmsis_os.h"
+#endif
+
+static DelayFunc_t delay_func = NULL;
+
+void Timing_Init(DelayFunc_t delay_func_param) {
+    delay_func = delay_func_param;
+}
+
+void Timing_Delay(uint32_t ms) {
+#ifdef USE_FREERTOS
+    // In RTOS: use vTaskDelay (non-blocking, yields to other tasks)
+    const TickType_t xDelay = pdMS_TO_TICKS(ms);
+    vTaskDelay(xDelay);
+#else
+    // In bare-metal: use HAL_Delay or custom function
+    if (delay_func != NULL) {
+        delay_func(ms);
+    } else {
+        HAL_Delay(ms);
+    }
+#endif
+}
+
+uint32_t Timing_GetTick(void) {
+#ifdef USE_FREERTOS
+    return xTaskGetTickCount();
+#else
+    return HAL_GetTick();
+#endif
+}
+
+bool Timing_IsTimeout(uint32_t start_tick, uint32_t timeout_ms) {
+    return (Timing_GetTick() - start_tick) >= timeout_ms;
+}
+```
+
+**Usage**: Replace all `HAL_Delay()` with `Timing_Delay()` in application code.
+
+### 2. Mutex/Critical Section Protection
+
+Add thread-safety to shift register driver and other shared resources:
+
+#### shift_register.c (RTOS-Ready)
+```c
+// At top of file
+#ifdef USE_FREERTOS
+#include "cmsis_os.h"
+static osMutexId_t shiftRegMutex = NULL;
+#define LOCK()   do { if(shiftRegMutex) osMutexAcquire(shiftRegMutex, osWaitForever); \
+                      else __disable_irq(); } while(0)
+#define UNLOCK() do { if(shiftRegMutex) osMutexRelease(shiftRegMutex); \
+                      else __enable_irq(); } while(0)
+#else
+// Bare-metal: use critical sections
+#define LOCK()   __disable_irq()
+#define UNLOCK() __enable_irq()
+#endif
+
+void ShiftReg_Init(void) {
+#ifdef USE_FREERTOS
+    // Create mutex for thread-safe access
+    shiftRegMutex = osMutexNew(NULL);
+#endif
+    // ... rest of init code ...
+}
+
+void ShiftReg_Update(uint8_t u1, uint8_t u2, uint8_t u3) {
+    LOCK();  // Protect shared hardware access
+    ShiftOut_Byte(u3);
+    ShiftOut_Byte(u2);
+    ShiftOut_Byte(u1);
+    Pulse_STCP();
+    UNLOCK();
+}
+```
+
+### 3. Non-Blocking State Machine Design
+
+**KEY PRINCIPLE**: Functions should check state, do small work, and return quickly. NEVER block.
+
+#### ❌ BAD: Blocking State Machine
+```c
+void TrafficLight_Run(void) {
+    while (1) {
+        SetLight(RED);
+        HAL_Delay(3000);      // ❌ Blocks everything
+        SetLight(ORANGE);
+        HAL_Delay(1000);      // ❌ Blocks everything
+        SetLight(GREEN);
+        HAL_Delay(5000);      // ❌ Blocks everything
+    }
+}
+```
+
+#### ✅ GOOD: Non-Blocking State Machine
+```c
+typedef enum {
+    STATE_RED,
+    STATE_RED_TO_ORANGE,
+    STATE_ORANGE,
+    STATE_ORANGE_TO_GREEN,
+    STATE_GREEN,
+    STATE_GREEN_TO_ORANGE
+} TrafficState_t;
+
+static TrafficState_t state = STATE_RED;
+static uint32_t stateStartTime = 0;
+
+void TrafficLight_Update(void) {
+    uint32_t now = Timing_GetTick();
+    uint32_t elapsed = now - stateStartTime;
+
+    switch (state) {
+        case STATE_RED:
+            if (elapsed >= 3000) {  // Red duration
+                state = STATE_RED_TO_ORANGE;
+                stateStartTime = now;
+                SetLight(ORANGE);
+            }
+            break;
+
+        case STATE_RED_TO_ORANGE:
+            if (elapsed >= orangeDelay) {
+                state = STATE_GREEN;
+                stateStartTime = now;
+                SetLight(GREEN);
+            }
+            break;
+
+        case STATE_GREEN:
+            if (elapsed >= greenDelay) {
+                state = STATE_GREEN_TO_ORANGE;
+                stateStartTime = now;
+                SetLight(ORANGE);
+            }
+            break;
+
+        case STATE_GREEN_TO_ORANGE:
+            if (elapsed >= orangeDelay) {
+                state = STATE_RED;
+                stateStartTime = now;
+                SetLight(RED);
+            }
+            break;
+    }
+}
+```
+
+**Call this function repeatedly from main loop or RTOS task** - it returns immediately.
+
+### 4. Task-Based Code Organization
+
+Structure code as "tasks" even in bare-metal mode:
+
+#### main.c (Task Structure)
+```c
+// Task function prototypes
+void Task_TrafficControl(void);
+void Task_PedestrianControl(void);
+void Task_ButtonPolling(void);
+void Task_BrightnessControl(void);
+
+int main(void) {
+    // Hardware initialization
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    // ... other init ...
+
+    Timing_Init(NULL);  // Use HAL_Delay for bare-metal
+    ShiftReg_Init();
+
+#ifdef USE_FREERTOS
+    // Create RTOS tasks
+    xTaskCreate(Task_TrafficControl, "Traffic", 256, NULL, 2, NULL);
+    xTaskCreate(Task_PedestrianControl, "Pedestrian", 256, NULL, 2, NULL);
+    xTaskCreate(Task_ButtonPolling, "Buttons", 128, NULL, 3, NULL);
+    xTaskCreate(Task_BrightnessControl, "Brightness", 128, NULL, 1, NULL);
+
+    // Start scheduler
+    osKernelStart();
+#else
+    // Bare-metal: call tasks sequentially in main loop
+    while (1) {
+        Task_TrafficControl();
+        Task_PedestrianControl();
+        Task_ButtonPolling();
+        Task_BrightnessControl();
+    }
+#endif
+}
+
+// Each task function should:
+// 1. Check if it has work to do
+// 2. Do a small unit of work
+// 3. Return quickly (non-blocking)
+void Task_TrafficControl(void) {
+#ifdef USE_FREERTOS
+    while (1) {
+        TrafficLight_Update();  // Update state machine
+        Timing_Delay(10);       // Yield to other tasks
+    }
+#else
+    TrafficLight_Update();      // Called repeatedly from main loop
+#endif
+}
+```
+
+### 5. UART/Peripheral Considerations
+
+#### Bare-Metal (Polling - OK for Tasks 1-2)
+```c
+uint8_t rx_data[4];
+HAL_UART_Receive(&huart2, rx_data, 4, HAL_MAX_DELAY);  // Blocking OK in bare-metal
+```
+
+#### RTOS (Interrupt/DMA Required)
+```c
+// In init:
+HAL_UART_Receive_IT(&huart2, rx_buffer, 1);  // Non-blocking, interrupt-driven
+
+// In callback:
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart == &huart2) {
+        // Process received byte
+        ProcessUARTByte(rx_buffer[0]);
+
+        // Restart reception
+        HAL_UART_Receive_IT(&huart2, rx_buffer, 1);
+    }
+}
+```
+
+### 6. Future FreeRTOS Migration Checklist
+
+When ready to enable FreeRTOS (optional, 0-2 bonus points):
+
+1. **Open `.ioc` file in STM32CubeMX**
+2. **Enable FreeRTOS**:
+   - Middleware → FREERTOS → Enable
+   - Interface: CMSIS_V2
+   - Heap: heap_4 (dynamic allocation)
+   - Total heap size: 8192 bytes (start small, increase if needed)
+3. **Configure RTOS parameters**:
+   - `configTOTAL_HEAP_SIZE`: 8192
+   - `configMINIMAL_STACK_SIZE`: 128
+   - `configMAX_PRIORITIES`: 5
+   - `configUSE_PREEMPTION`: Enabled
+   - `configUSE_TIME_SLICING`: Enabled
+4. **Generate code** (keep existing code in USER CODE sections)
+5. **Define `USE_FREERTOS`** in preprocessor symbols:
+   - Project Properties → C/C++ Build → Settings → MCU GCC Compiler → Preprocessor
+   - Add: `USE_FREERTOS`
+6. **Rebuild project** - timing layer and mutexes automatically activate
+
+### Design Checklist
+
+Before implementing state machines, verify:
+
+- [ ] Created `timing.h` and `timing.c` abstraction layer
+- [ ] Added `LOCK()`/`UNLOCK()` macros to shift register driver
+- [ ] Designed state machines as non-blocking (no HAL_Delay in states)
+- [ ] Structured main.c with task functions
+- [ ] All delays use `Timing_Delay()` instead of `HAL_Delay()`
+- [ ] All tick reads use `Timing_GetTick()` instead of `HAL_GetTick()`
+- [ ] No blocking loops in application logic
+- [ ] Shared resources have critical section protection
+
+**BENEFIT**: This architecture works perfectly in bare-metal mode but requires ZERO refactoring to migrate to FreeRTOS. Just flip a compiler flag and add task creation code!
+
+---
+
 ## Current Implementation Status
 
 ### ✅ Completed
@@ -424,6 +788,6 @@ printf("State: %d\n", state);  // Via UART to ST-Link
 
 ---
 
-**Last Updated**: 2025-11-18
+**Last Updated**: 2025-11-21
 **Project Directory**: `/Users/jakob/dev/kth/IS1300/TrafficLightShield/`
 **Build**: ✅ Compiling successfully
